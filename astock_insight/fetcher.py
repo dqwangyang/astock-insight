@@ -201,6 +201,40 @@ def fetch_market_overview() -> dict:
     return overview
 
 
+# ─── 热门个股 ─────────────────────────────────────────────────
+
+def fetch_hot_stocks(limit: int = 10) -> list[dict]:
+    """获取全市场最热个股（按成交额排序）"""
+    url = (
+        "https://push2.eastmoney.com/api/qt/clist/get"
+        "?cb=jQuery&pn=1&pz=" + str(limit) + "&po=1&np=1"
+        "&fields=f2,f3,f4,f12,f14,f15,f16,f17,f18"
+        "&fid=f6"  # f6=成交额，排序
+        "&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23"
+        "&ut=bd1d9ddb04089700cf9c27f6f7426281"
+    )
+    results = []
+    try:
+        data = _fetch_json(url)
+        items = data.get("data", {}).get("diff", [])
+        for item in items:
+            raw_pct = item.get("f3")
+            results.append({
+                "code": item.get("f12", ""),
+                "name": item.get("f14", ""),
+                "price": item.get("f2"),
+                "change_pct": (raw_pct / 100) if raw_pct is not None else None,
+                "change": (item.get("f4", 0) / 100) if item.get("f4") else None,
+                "high": item.get("f15"),
+                "low": item.get("f16"),
+                "open": item.get("f17"),
+                "volume": item.get("f18"),  # 成交量
+            })
+        return results
+    except Exception:
+        return []
+
+
 # ─── 龙虎榜 ──────────────────────────────────────────────────
 
 def fetch_lhb(tab: str = "all") -> list[dict]:
