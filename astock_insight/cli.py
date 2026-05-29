@@ -2,20 +2,23 @@
 astock-insight CLI 入口
 
 用法:
-  astock-insight all              # 全景报告
-  astock-insight market           # 大盘指数
-  astock-insight sectors          # 行业板块排行
-  astock-insight hot              # 热门板块/热点
-  astock-insight lhb              # 龙虎榜
-  astock-insight quote <code>     # 个股行情 (如 sh600519)
-  astock-insight watch <code>     # 盯盘模式 (持续刷新)
-  astock-insight batch <codes>    # 批量行情 (逗号分隔)
-  astock-insight status           # 市场状态
-  astock-insight version          # 版本信息
+  astock-insight all                    # 全景报告
+  astock-insight market                 # 大盘指数
+  astock-insight sectors                # 行业板块排行
+  astock-insight hot                    # 热门板块/热点
+  astock-insight lhb                    # 龙虎榜
+  astock-insight quote <code>           # 个股行情 (如 sh600519)
+  astock-insight batch <codes>          # 批量行情 (逗号分隔)
+  astock-insight status                 # 市场状态
+
+所有命令支持 --watch / -w 开启持续刷新，例如:
+  astock-insight market --watch         # 大盘持续盯盘
+  astock-insight quote sh600519 -w      # 个股盯盘 (含K线走势图)
 """
 
 import sys
 import time
+import io
 from datetime import datetime
 
 from . import __version__
@@ -25,6 +28,7 @@ from .fetcher import (
     fetch_market_overview,
     fetch_lhb,
     fetch_stock_quote,
+    fetch_kline,
     fetch_batch_quote,
     get_market_status,
     fetch_sector_rank,
@@ -33,19 +37,75 @@ from .fetcher import (
 from .reporter import (
     header_block,
     section,
-    print_index_quotes,
-    print_sectors,
-    print_market_overview,
-    print_lhb,
-    print_stock_quote,
-    print_footer,
-    print_report,
+    render_index_quotes,
+    render_sectors,
+    render_market_overview,
+    render_lhb,
+    render_stock_quote,
+    render_report,
+    render_kline_bars,
+    footer_line,
 )
 
 
+# ─── 无闪烁刷新循环 ──────────────────────────────────────────
+
+def refresh_loop(render_func, interval=5):
+    """
+    无闪烁刷新循环。
+    使用光标上移 + 覆盖写入，不会清屏/闪动。
+    """
+    lines_written = [0]
+
+    def _render():
+        # 捕获输出
+        old = sys.stdout
+        sys.stdout = buf = io.StringIO()
+        try:
+            render_func()
+        finally:
+            sys.stdout = old
+
+        output = buf.getvalue()
+        new_lines = output.count("\n")
+
+        if lines_written[0] > 0:
+            # 光标上移 + 清除剩余行 → 原位覆盖
+            sys.stdout.write(f"\033[{lines_written[0]}A\033[J")
+
+        sys.stdout.write(output)
+        sys.stdout.flush()
+        lines_written[0] = new_lines
+
+    _render()
+    try:
+        while True:
+            time.sleep(interval)
+            _render()
+    except KeyboardInterrupt:
+        # 最后多空一行，保留输出
+        print()
+
+
+def with_watch(func, *args, **kwargs):
+    """装饰：带 --watch 的版本"""
+    watch = kwargs.pop("watch", False)
+    interval = kwargs.pop("interval", 5)
+    if watch:
+
+        def _render():
+            func(*args, **kwargs)
+
+        refresh_loop(_render, interval)
+    else:
+        func(*args, **kwargs)
+
+
+# ─── 命令实现 ────────────────────────────────────────────────
+
 def cmd_all():
     """全景报告"""
-    report = {
+    r = {
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "market_status": get_market_status(),
         "overview": fetch_market_overview(),
@@ -54,36 +114,32 @@ def cmd_all():
         "lhb": fetch_lhb("all")[:10],
         "hot": fetch_hot_sectors()[:10],
     }
-    print_report(report)
+    print(render_report(r))
 
 
 def cmd_market():
     """大盘指数"""
-    header_block("主要指数行情", f"更新时间: {datetime.now().strftime('%H:%M:%S')}  |  状态: {get_market_status()}")
-    indices = fetch_index_quotes()
-    print_index_quotes(indices)
-
-    overview = fetch_market_overview()
+    t = datetime.now().strftime("%H:%M:%S")
+    s = get_market_status()
+    print(header_block("主要指数行情", f"{t}  |  状态: {s}"))
+    print(render_index_quotes(fetch_index_quotes()))
     print()
-    print_market_overview(overview, get_market_status())
-    print_footer()
+    print(render_market_overview(fetch_market_overview(), s))
+    print(footer_line())
 
 
 def cmd_sectors():
     """行业板块排行"""
-    header_block("行业板块涨幅排行", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    sectors = fetch_sector_rank()
-    print_sectors(sectors)
-    print_footer()
+    print(header_block("行业板块涨幅排行", datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+    print(render_sectors(fetch_sector_rank()))
+    print(footer_line())
 
 
 def cmd_hot():
     """热门板块"""
-    header_block("市场热门板块", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    hot = fetch_hot_sectors()
-    print_sectors(hot)
-
-    section("市场热点头条")
+    print(header_block("市场热门板块", datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+    print(render_sectors(fetch_hot_sectors()))
+    print(section("市场热点头条"))
     news = fetch_market_news(5)
     for i, n in enumerate(news, 1):
         name = n.get("name", "")
@@ -93,76 +149,36 @@ def cmd_hot():
             print(f"  {i}. {name}  ({sign}{pct:.2f}%)")
         else:
             print(f"  {i}. {name}")
-    print_footer()
+    print(footer_line())
 
 
 def cmd_lhb():
     """龙虎榜"""
-    header_block("龙虎榜", datetime.now().strftime("%Y-%m-%d"))
-    lhb_data = fetch_lhb("all")
-    print_lhb(lhb_data)
-
-    section("机构榜")
-    jg_data = fetch_lhb("jg")
-    print_lhb(jg_data)
-
-    section("游资榜")
-    yyb_data = fetch_lhb("yyb")
-    print_lhb(yyb_data)
-    print_footer()
+    print(header_block("龙虎榜", datetime.now().strftime("%Y-%m-%d")))
+    print(render_lhb(fetch_lhb("all")))
+    print(section("机构榜"))
+    print(render_lhb(fetch_lhb("jg")))
+    print(section("游资榜"))
+    print(render_lhb(fetch_lhb("yyb")))
+    print(footer_line())
 
 
 def cmd_quote(code: str):
-    """个股行情"""
-    header_block("个股行情", code)
+    """个股行情（含K线走势图）"""
+    t = datetime.now().strftime("%H:%M:%S")
+    print(header_block("个股行情", f"{code}  |  {t}  |  状态: {get_market_status()}"))
     q = fetch_stock_quote(code)
-    print_stock_quote(q, detail=True)
-    print_footer()
+    print(render_stock_quote(q, detail=True))
 
-
-def cmd_watch(code: str):
-    """盯盘模式 — 持续刷新个股行情"""
-    interval = 5  # 刷新间隔（秒）
-    print(f"\n  🔴 盯盘模式: {code}  |  每 {interval} 秒自动刷新  |  按 Ctrl+C 退出\n")
-
-    first = True
-    try:
-        while True:
-            if not first:
-                time.sleep(interval)
-                # 清除屏幕（ANSI 转义）
-                print("\033c", end="")
-                print(f"  🔴 盯盘模式: {code}  |  每 {interval} 秒自动刷新  |  按 Ctrl+C 退出\n")
-            first = False
-
-            q = fetch_stock_quote(code)
-            if not q:
-                print(f"  ❌ 查询失败: {code}")
-                continue
-
-            name = q.get("name", code)
-            price = q.get("price", 0)
-            pct = q.get("change_pct", 0)
-            chg = q.get("change", 0)
-            sign = "+" if pct > 0 else ""
-
-            ts = datetime.now().strftime("%H:%M:%S")
-            print(f"  [{ts}]  {name}  ({code})")
-            print(f"  {'─' * 40}")
-            print(f"  现价: {price:.2f}")
-            print(f"  涨幅: {sign}{pct:.2f}%   涨跌: {sign}{chg:.2f}")
-            print(f"  最高: {q.get('high', 0):.2f}   最低: {q.get('low', 0):.2f}")
-            print(f"  开盘: {q.get('open', 0):.2f}   昨收: {q.get('pre_close', 0):.2f}")
-            print(f"  成交量: {_fmt_vol(q.get('volume', 0))}  换手率: {q.get('turnover_rate', 'N/A')}%")
-
-    except KeyboardInterrupt:
-        print("\n\n  👋 盯盘结束")
-
-
-def _fmt_vol(v: float) -> str:
-    if v > 10000:
-        return f"{v / 10000:.2f}亿"
-    return f"{v:.0f}万"
+    # 附加 K 线走势图
+    if q:
+        print()
+        klines = fetch_kline(code, limit=30)
+        if klines:
+            print(render_kline_bars(klines))
+        else:
+            print("  (K线数据获取中...)")
+    print(footer_line())
 
 
 def cmd_batch(codes_str: str):
@@ -171,11 +187,12 @@ def cmd_batch(codes_str: str):
     if not codes:
         print("错误: 请至少提供一个股票代码")
         return
-    header_block("批量行情", f"{len(codes)} 只股票")
+    t = datetime.now().strftime("%H:%M:%S")
+    print(header_block("批量行情", f"{len(codes)} 只股票  |  {t}"))
     for code in codes:
         q = fetch_stock_quote(code)
-        print_stock_quote(q, detail=True)
-    print_footer()
+        print(render_stock_quote(q, detail=True))
+    print(footer_line())
 
 
 def cmd_status():
@@ -185,7 +202,7 @@ def cmd_status():
     print(f"\n  市场状态: {status}")
     if indices:
         print()
-        print_index_quotes(indices)
+        print(render_index_quotes(indices))
 
 
 def cmd_version():
@@ -198,16 +215,20 @@ def cmd_version():
 def usage():
     print(f"\n  astock-insight v{__version__} — A股市场全景分析工具\n")
     print("  用法:")
-    print(f"    astock-insight all             全景报告")
-    print(f"    astock-insight market          大盘指数")
-    print(f"    astock-insight sectors         行业板块排行")
-    print(f"    astock-insight hot             热门板块/热点")
-    print(f"    astock-insight lhb             龙虎榜")
-    print(f"    astock-insight quote <代码>     个股行情")
-    print(f"    astock-insight watch <代码>     盯盘模式 (每5秒刷新)")
-    print(f"    astock-insight batch <代码们>   批量行情")
-    print(f"    astock-insight status          市场状态")
-    print(f"    astock-insight version        版本信息")
+    print("    astock-insight all             全景报告")
+    print("    astock-insight market          大盘指数")
+    print("    astock-insight sectors         行业板块排行")
+    print("    astock-insight hot             热门板块/热点")
+    print("    astock-insight lhb             龙虎榜")
+    print("    astock-insight quote <代码>     个股行情 (含K线走势图)")
+    print("    astock-insight batch <代码们>   批量行情")
+    print("    astock-insight status          市场状态")
+    print("    astock-insight version         版本信息")
+    print()
+    print("  所有命令支持 --watch / -w 持续刷新:")
+    print("    astock-insight market --watch       大盘盯盘")
+    print("    astock-insight quote sh600519 -w    个股盯盘")
+    print("    astock-insight hot --watch          热门板块盯盘")
     print()
 
 
@@ -216,33 +237,74 @@ def main():
         usage()
         return
 
-    cmd = sys.argv[1]
+    # 检测 --watch / -w 标志
+    watch = "--watch" in sys.argv or "-w" in sys.argv
+    # 过滤掉 watch 标志
+    args = [a for a in sys.argv[1:] if a not in ("--watch", "-w")]
+
+    if not args:
+        usage()
+        return
+
+    cmd = args[0]
 
     if cmd in ("all", "-a", "--all"):
-        cmd_all()
+        if watch:
+            refresh_loop(cmd_all, interval=10)
+        else:
+            cmd_all()
     elif cmd in ("market", "-m", "--market"):
-        cmd_market()
+        if watch:
+            refresh_loop(cmd_market, interval=5)
+        else:
+            cmd_market()
     elif cmd in ("sectors", "--sectors"):
-        cmd_sectors()
+        if watch:
+            refresh_loop(cmd_sectors, interval=5)
+        else:
+            cmd_sectors()
     elif cmd in ("hot", "--hot"):
-        cmd_hot()
+        if watch:
+            refresh_loop(cmd_hot, interval=5)
+        else:
+            cmd_hot()
     elif cmd in ("lhb", "--lhb", "longhu"):
-        cmd_lhb()
+        if watch:
+            refresh_loop(cmd_lhb, interval=10)
+        else:
+            cmd_lhb()
     elif cmd in ("quote", "q"):
-        if len(sys.argv) < 3:
+        if len(args) < 2:
             print("用法: astock-insight quote <股票代码>")
             return
-        cmd_quote(sys.argv[2])
-    elif cmd in ("watch", "w", "live"):
-        if len(sys.argv) < 3:
-            print("用法: astock-insight watch <股票代码>")
-            return
-        cmd_watch(sys.argv[2])
+        code = args[1]
+        if watch:
+            # 盯盘模式：精简版 K 线 + 实时行情
+            def _render_quote():
+                t = datetime.now().strftime("%H:%M:%S")
+                print(header_block("盯盘", f"{code}  |  {t}  |  状态: {get_market_status()}  |  Ctrl+C 退出"))
+                q = fetch_stock_quote(code)
+                print(render_stock_quote(q, detail=True))
+                if q:
+                    print()
+                    klines = fetch_kline(code, limit=30)
+                    if klines:
+                        print(render_kline_bars(klines))
+                print(footer_line())
+            refresh_loop(_render_quote, interval=5)
+        else:
+            cmd_quote(code)
     elif cmd in ("batch", "b"):
-        if len(sys.argv) < 3:
+        if len(args) < 2:
             print("用法: astock-insight batch <代码1>,<代码2>,...")
             return
-        cmd_batch(sys.argv[2])
+        if watch:
+            codes_str = args[1]
+            def _render_batch():
+                cmd_batch(codes_str)
+            refresh_loop(_render_batch, interval=5)
+        else:
+            cmd_batch(args[1])
     elif cmd in ("status", "st"):
         cmd_status()
     elif cmd in ("version", "-v", "--version"):
