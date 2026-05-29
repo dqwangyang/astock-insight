@@ -13,6 +13,7 @@ setup(
     entry_points={
         "console_scripts": [
             "astock-insight=astock_insight.cli:main",
+            "asi=astock_insight.cli:main",
         ],
     },
     classifiers=[
