@@ -178,14 +178,14 @@ def render_stock_quote(q: dict, detail: bool = False) -> str:
     lines = [
         f"\n  {BOLD}{name}{RESET}  {q.get('code', '')}",
         f"  现价: {_c(price_color, f'{price_val:.2f}')}  "
-        f"涨幅: {sign}{pct:.2f}%  "
-        f"涨跌: {sign}{chg_val:.2f}",
+        f"涨幅: {_c(price_color, sign + str(pct) + '%')}  "
+        f"涨跌: {_c(price_color, sign + f'{chg_val:.2f}')}",
     ]
     if detail:
         lines.append(
-            f"  开盘: {open_val:.2f}  "
-            f"最高: {high_val:.2f}  "
-            f"最低: {low_val:.2f}  "
+            f"  开盘: {_c(price_color, f'{open_val:.2f}')}  "
+            f"最高: {_c(price_color, f'{high_val:.2f}')}  "
+            f"最低: {_c(price_color, f'{low_val:.2f}')}  "
             f"昨收: {pre_close_val:.2f}"
         )
         lines.append(
