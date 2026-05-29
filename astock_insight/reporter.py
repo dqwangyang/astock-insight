@@ -236,7 +236,24 @@ def render_recommendations(data: dict) -> str:
 
     # 大盘背景
     ctx = data.get("market_context", "")
-    lines.append(f"  📊 {ctx}")
+    # 给上涨/下跌家数加颜色
+    import re
+    ctx_colored = re.sub(
+        r"上涨 (\d+) 家",
+        lambda m: f"上涨 {_c(GREEN, m.group(1))} 家",
+        ctx
+    )
+    ctx_colored = re.sub(
+        r"下跌 (\d+) 家",
+        lambda m: f"下跌 {_c(RED, m.group(1))} 家",
+        ctx_colored
+    )
+    ctx_colored = re.sub(
+        r"([+-]?\d+\.\d+%)",
+        lambda m: _color_pct(float(m.group(1).replace("%", ""))),
+        ctx_colored
+    )
+    lines.append(f"  📊 {ctx_colored}")
     lines.append("")
 
     # 板块推荐
