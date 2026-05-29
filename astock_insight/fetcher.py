@@ -1,6 +1,6 @@
 """
 数据获取模块 — 从公开接口拉取A股市场数据
-数据来源：腾讯/新浪/东方财富公开API，完全合规，仅用于信息展示
+数据来源：腾讯/东方财富公开API，完全合规，仅用于信息展示
 """
 
 import json
@@ -15,7 +15,7 @@ ssl_ctx.check_hostname = False
 ssl_ctx.verify_mode = ssl.CERT_NONE
 
 
-def _fetch(url: str, timeout: int = 10, encoding: str | None = None) -> str:
+def _fetch(url: str, timeout: int = 10) -> str:
     """通用HTTP GET请求"""
     req = urllib.request.Request(
         url,
@@ -30,9 +30,7 @@ def _fetch(url: str, timeout: int = 10, encoding: str | None = None) -> str:
     )
     with urllib.request.urlopen(req, timeout=timeout, context=ssl_ctx) as resp:
         raw = resp.read()
-    if encoding:
-        return raw.decode(encoding, errors="replace")
-    # 尝试 UTF-8，如果失败则回退 GBK
+    # 腾讯接口返回 GBK，东方财富返回 UTF-8
     try:
         return raw.decode("utf-8")
     except UnicodeDecodeError:
@@ -42,11 +40,9 @@ def _fetch(url: str, timeout: int = 10, encoding: str | None = None) -> str:
 def _extract_json(raw: str) -> str:
     """从 callback 包裹格式 (如 jQuery({...})) 中提取纯JSON"""
     s = raw.strip()
-    # 处理 jQuery({...}) 或 var xxx={...} 格式
     paren = s.find("(")
     brace = s.find("{")
     if paren >= 0 and (brace < 0 or paren < brace):
-        # 找到第一个 '(' 和最后一个 ')'
         start = paren + 1
         end = s.rfind(")")
         if end > start:
@@ -65,20 +61,19 @@ def _fetch_json(url: str, timeout: int = 10) -> dict:
 
 # ─── 指数实时行情 ─────────────────────────────────────────────
 
-# 常用指数代码
 INDEX_MAP = {
-    "sh000001": ("上证指数", "000001"),
-    "sz399001": ("深证成指", "399001"),
-    "sz399006": ("创业板指", "399006"),
-    "sh000688": ("科创50", "000688"),
-    "sh000300": ("沪深300", "000300"),
-    "sh000016": ("上证50", "000016"),
-    "sh000905": ("中证500", "000905"),
+    "sh000001": "上证指数",
+    "sz399001": "深证成指",
+    "sz399006": "创业板指",
+    "sh000688": "科创50",
+    "sh000300": "沪深300",
+    "sh000016": "上证50",
+    "sh000905": "中证500",
 }
 
 def fetch_index_quotes() -> list[dict]:
     """获取主要指数实时行情（腾讯接口）"""
-    codes = ",".join(k for k in INDEX_MAP)
+    codes = ",".join(INDEX_MAP.keys())
     url = f"https://qt.gtimg.cn/q={codes}"
     raw = _fetch(url)
     results = []
@@ -86,41 +81,30 @@ def fetch_index_quotes() -> list[dict]:
         line = line.strip()
         if not line or not line.startswith("v_"):
             continue
-        # 解析腾讯返回格式
         try:
             parts = line.split("~")
             if len(parts) < 40:
                 continue
             code_full = parts[0].split("=")[0].replace("v_", "")
-            name = parts[1]
-            price = float(parts[3]) if parts[3] else 0
-            change = float(parts[31]) if parts[31] else 0     # 涨跌额
-            change_pct = float(parts[32]) if parts[32] else 0  # 涨跌幅%
-            open_p = float(parts[5]) if parts[5] else 0
-            high = float(parts[33]) if parts[33] else 0
-            low = float(parts[34]) if parts[34] else 0
-            pre_close = float(parts[4]) if parts[4] else 0
-            volume = float(parts[6]) if parts[6] else 0       # 手
-            amount = float(parts[7]) if parts[7] else 0        # 万
             results.append({
                 "code": code_full,
-                "name": name,
-                "price": price,
-                "change": change,
-                "change_pct": change_pct,
-                "open": open_p,
-                "high": high,
-                "low": low,
-                "pre_close": pre_close,
-                "volume": volume,
-                "amount": amount,
+                "name": parts[1],
+                "price": float(parts[3]) if parts[3] else 0,
+                "change": float(parts[31]) if parts[31] else 0,
+                "change_pct": float(parts[32]) if parts[32] else 0,
+                "open": float(parts[5]) if parts[5] else 0,
+                "high": float(parts[33]) if parts[33] else 0,
+                "low": float(parts[34]) if parts[34] else 0,
+                "pre_close": float(parts[4]) if parts[4] else 0,
+                "volume": float(parts[6]) if parts[6] else 0,
+                "amount": float(parts[7]) if parts[7] else 0,
             })
         except (ValueError, IndexError):
             continue
     return results
 
 
-# ─── 热门板块排行 ───────────────────────────────────────────
+# ─── 热门板块 / 行业排行 ──────────────────────────────────────
 
 def _fetch_em_qlist(url: str) -> list[dict]:
     """通用：解析东方财富 clist/get 接口返回的 diff 列表"""
@@ -131,7 +115,6 @@ def _fetch_em_qlist(url: str) -> list[dict]:
             return []
         results = []
         for item in items:
-            # 东方财富的涨跌幅是千分比（164 = 1.64%），需除以100
             raw_pct = item.get("f3")
             raw_chg = item.get("f4")
             change_pct = raw_pct / 100 if raw_pct is not None else None
@@ -149,7 +132,7 @@ def _fetch_em_qlist(url: str) -> list[dict]:
 
 
 def fetch_hot_sectors() -> list[dict]:
-    """获取热门板块排行（东方财富公开接口）"""
+    """热门板块排行（东方财富）"""
     url = (
         "https://push2.eastmoney.com/api/qt/clist/get"
         "?cb=jQuery&pn=1&pz=20&po=1&np=1"
@@ -158,8 +141,6 @@ def fetch_hot_sectors() -> list[dict]:
     )
     return _fetch_em_qlist(url)
 
-
-# ─── 涨跌榜（行业板块区间涨幅）────────────────────────────────
 
 def fetch_sector_rank() -> list[dict]:
     """申万一级行业区间涨幅排行"""
@@ -176,17 +157,12 @@ def fetch_sector_rank() -> list[dict]:
 
 def fetch_market_overview() -> dict:
     """获取沪深市场概况（涨跌家数估算）"""
-    overview = {
-        "up": 0, "down": 0, "flat": 0,
-        "limit_up": 0, "limit_down": 0,
-        "total": 0,
-    }
+    overview = {"up": 0, "down": 0, "flat": 0, "limit_up": 0, "limit_down": 0, "total": 0}
     try:
-        # 按股票代码排序（近似随机分布），取100只样本估算涨跌比
         url = (
             "https://push2.eastmoney.com/api/qt/clist/get"
             "?cb=jQuery&pn=1&pz=100&po=0&np=1"
-            "&fields=f3&fid=f12"  # 按代码排序，近似随机
+            "&fields=f3&fid=f12"
             "&fs=m:0+t:6,m:0+t:80"
             "&ut=bd1d9ddb04089700cf9c27f6f7426281"
         )
@@ -196,55 +172,42 @@ def fetch_market_overview() -> dict:
         items = data.get("data", {}).get("diff", [])
         if not items:
             return overview
-
-        sample_up = 0
-        sample_down = 0
-        sample_flat = 0
+        sample_up = sample_down = sample_flat = 0
+        limit_up_s = limit_down_s = 0
         for item in items:
             pct = item.get("f3")
             if pct is None:
                 sample_flat += 1
             elif pct >= 990:
-                sample_up += 1
+                limit_up_s += 1; sample_up += 1
             elif pct <= -990:
-                sample_down += 1
+                limit_down_s += 1; sample_down += 1
             elif pct > 0:
                 sample_up += 1
             elif pct < 0:
                 sample_down += 1
             else:
                 sample_flat += 1
-
-        sample_total = sample_up + sample_down + sample_flat
-        if sample_total > 0:
-            ratio = total / sample_total
-            overview["up"] = int(sample_up * ratio)
-            overview["down"] = int(sample_down * ratio)
-            overview["flat"] = int(sample_flat * ratio)
-            limit_up_sample = sum(1 for i in items if i.get("f3", -1) >= 990)
-            limit_down_sample = sum(1 for i in items if i.get("f3", 1) <= -990)
-            overview["limit_up"] = int(limit_up_sample * ratio)
-            overview["limit_down"] = int(limit_down_sample * ratio)
-
+        sm = sample_up + sample_down + sample_flat
+        if sm > 0:
+            r = total / sm
+            overview["up"] = int(sample_up * r)
+            overview["down"] = int(sample_down * r)
+            overview["flat"] = int(sample_flat * r)
+            overview["limit_up"] = int(limit_up_s * r)
+            overview["limit_down"] = int(limit_down_s * r)
     except Exception:
         pass
     return overview
 
 
-# ─── 龙虎榜（东方财富）───────────────────────────────────────
+# ─── 龙虎榜 ──────────────────────────────────────────────────
 
 def fetch_lhb(tab: str = "all") -> list[dict]:
     """龙虎榜数据"""
-    tab_map = {
-        "all": "0",   # 全部
-        "jg": "2",    # 机构
-        "yyb": "4",   # 游资
-    }
+    tab_map = {"all": "0", "jg": "2", "yyb": "4"}
     tab_val = tab_map.get(tab, "0")
-    url = (
-        f"https://data.eastmoney.com/stock/data/lhb/"
-        f"get_lhb_listdata.ashx?type={tab_val}&sty=all"
-    )
+    url = f"https://data.eastmoney.com/stock/data/lhb/get_lhb_listdata.ashx?type={tab_val}&sty=all"
     results = []
     try:
         data = _fetch_json(url)
@@ -254,7 +217,7 @@ def fetch_lhb(tab: str = "all") -> list[dict]:
                 "code": item.get("SECURITY_CODE", ""),
                 "name": item.get("SECURITY_NAME_ABBR", ""),
                 "change_pct": item.get("CHANGE_PCT", 0),
-                "amount": item.get("AMOUNT", 0),   # 万
+                "amount": item.get("AMOUNT", 0),
                 "reason": item.get("LHB_REASON", ""),
             })
     except Exception:
@@ -262,7 +225,7 @@ def fetch_lhb(tab: str = "all") -> list[dict]:
     return results
 
 
-# ─── 市场资讯（沪深市场新闻）─────────────────────────────────
+# ─── 市场资讯 ─────────────────────────────────────────────────
 
 def fetch_market_news(limit: int = 10) -> list[dict]:
     """获取沪深市场最新动态"""
@@ -278,7 +241,6 @@ def fetch_market_news(limit: int = 10) -> list[dict]:
         results = _fetch_em_qlist(url)
     except Exception:
         pass
-    # Fallback: 热门板块
     if not results:
         try:
             url = (
@@ -292,7 +254,7 @@ def fetch_market_news(limit: int = 10) -> list[dict]:
     return results
 
 
-# ─── 单只股票实时行情 ────────────────────────────────────────
+# ─── 个股行情 ─────────────────────────────────────────────────
 
 def fetch_stock_quote(code: str) -> dict | None:
     """获取单只股票实时行情（腾讯接口）"""
@@ -320,15 +282,51 @@ def fetch_stock_quote(code: str) -> dict | None:
                 "pe": parts[39],
                 "amplitude": parts[43],
                 "turnover_rate": parts[38],
-                "total_mv": parts[44],  # 总市值
-                "circulate_mv": parts[45],  # 流通市值
+                "total_mv": parts[44],
+                "circulate_mv": parts[45],
             }
     except (ValueError, IndexError):
         return None
     return None
 
 
-# ─── 批量股票行情 ────────────────────────────────────────────
+# ─── K 线数据 ─────────────────────────────────────────────────
+
+def fetch_kline(code: str, period: str = "day", limit: int = 30) -> list[dict]:
+    """获取 K 线数据"""
+    url = f"http://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={code},{period},,,{limit},qfq"
+    results = []
+    try:
+        data = _fetch_json(url)
+        # 腾讯 K 线接口返回结构: data -> {code} -> day/week/month -> [[date,open,close,high,low,volume], ...]
+        stock_data = data.get("data", {})
+        # 尝试找到正确的键
+        for key in (code, code.replace(".", ""), code.upper(), code.lower()):
+            if key in stock_data:
+                detail = stock_data[key]
+                break
+        else:
+            detail = stock_data
+        # 查找 K 线数组
+        kl = detail.get(period, detail.get("qfq" + period, []))
+        if not kl:
+            return results
+        for item in kl:
+            if len(item) >= 6:
+                results.append({
+                    "date": item[0],
+                    "open": float(item[1]),
+                    "close": float(item[2]),
+                    "high": float(item[3]),
+                    "low": float(item[4]),
+                    "volume": float(item[5]),
+                })
+        return results[-limit:]  # 取最近 N 条
+    except Exception:
+        return []
+
+
+# ─── 批量行情 ─────────────────────────────────────────────────
 
 def fetch_batch_quote(codes: list[str]) -> list[dict]:
     """批量获取股票行情"""
@@ -360,7 +358,7 @@ def fetch_batch_quote(codes: list[str]) -> list[dict]:
     return results
 
 
-# ─── N日均线选股（模拟/演示）─────────────────────────────────
+# ─── 市场时间 ─────────────────────────────────────────────────
 
 def get_market_status() -> str:
     """判断市场是否在交易时段"""
