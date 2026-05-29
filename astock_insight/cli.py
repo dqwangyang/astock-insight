@@ -29,6 +29,7 @@ from .fetcher import (
     fetch_lhb,
     fetch_stock_quote,
     fetch_kline,
+    fetch_hot_stocks,
     fetch_batch_quote,
     get_market_status,
     fetch_sector_rank,
@@ -232,7 +233,22 @@ def cmd_recommend():
             reason = "短期承压，等待企稳信号"
         sectors_data.append({**s, "reason": reason})
 
-    # 3. 龙虎榜亮点（机构买入）
+    # 3. 热门个股（成交额排行）
+    hot_stocks = fetch_hot_stocks(8)
+    stock_picks = []
+    for s in hot_stocks:
+        pct = s.get("change_pct", 0) or 0
+        if pct >= 5:
+            reason = "成交额居前，资金博弈激烈"
+        elif pct >= 2:
+            reason = "量价齐升，短线关注"
+        elif pct >= 0:
+            reason = "成交活跃，波动机会"
+        else:
+            reason = "放量下跌，观望为宜"
+        stock_picks.append({**s, "reason": reason})
+
+    # 4. 龙虎榜机构关注
     lhb_data = fetch_lhb("jg")[:3]
     lhb_picks = []
     for item in lhb_data:
@@ -248,6 +264,7 @@ def cmd_recommend():
     print(render_recommendations({
         "market_context": market_context,
         "sectors": sectors_data,
+        "stocks": stock_picks,
         "lhb": lhb_picks,
     }))
     print(footer_line())
