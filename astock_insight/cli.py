@@ -44,6 +44,7 @@ from .reporter import (
     render_stock_quote,
     render_report,
     render_kline_bars,
+    render_recommendations,
     footer_line,
 )
 
@@ -205,6 +206,60 @@ def cmd_status():
         print(render_index_quotes(indices))
 
 
+def cmd_recommend():
+    """推荐关注 — 基于市场数据给出关注建议和理由"""
+    t = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(header_block("今日关注", f"{t}  |  状态: {get_market_status()}"))
+
+    # 1. 大盘背景
+    indices = fetch_index_quotes()
+    overview = fetch_market_overview()
+    market_context = f"大盘 {indices[0]['name']} {indices[0]['price']:.2f} ({indices[0]['change_pct']:+.2f}%)，"
+    market_context += f"上涨 {overview.get('up',0)} 家 / 下跌 {overview.get('down',0)} 家"
+
+    # 2. 热门板块
+    hot = fetch_hot_sectors()[:5]
+    sectors_data = []
+    for s in hot:
+        pct = s.get("change_pct", 0) or 0
+        if pct >= 4:
+            reason = "资金集中涌入，短线热度高"
+        elif pct >= 2:
+            reason = "板块联动效应明显，持续关注"
+        elif pct >= 0:
+            reason = "相对抗跌，防御性配置方向"
+        else:
+            reason = "短期承压，等待企稳信号"
+        sectors_data.append({**s, "reason": reason})
+
+    # 3. 龙虎榜亮点（机构买入）
+    lhb_data = fetch_lhb("jg")[:3]
+    lhb_picks = []
+    for item in lhb_data:
+        pct = item.get("change_pct", 0) or 0
+        amt = item.get("amount", 0) or 0
+        lhb_picks.append({
+            "name": item.get("name", ""),
+            "code": item.get("code", ""),
+            "change_pct": pct,
+            "reason": f"机构上榜，成交额 {amt:.0f}万"
+        })
+
+    print(render_recommendations({
+        "market_context": market_context,
+        "sectors": sectors_data,
+        "lhb": lhb_picks,
+    }))
+    print(footer_line())
+
+
+def _process_recommend(args):
+    """处理推荐命令参数"""
+    watch = "--watch" in args or "-w" in args
+    args_clean = [a for a in args if a not in ("--watch", "-w")]
+    return watch, args_clean
+
+
 def cmd_version():
     """版本信息"""
     print(f"\n  astock-insight v{__version__}")
@@ -220,6 +275,7 @@ def usage():
     print("    asi sectors          行业板块排行")
     print("    asi hot              热门板块/热点")
     print("    asi lhb              龙虎榜")
+    print("    asi pick             今日关注 (推荐+理由)")
     print("    asi q <代码>          个股行情 (含K线)")
     print("    asi b <代码们>        批量行情")
     print()
@@ -228,8 +284,7 @@ def usage():
     print("    asi q sh600519 -w    个股盯盘 (含K线)")
     print("    asi q sh600519,sz300750 -w  多股盯盘")
     print("    asi hot -w           板块盯盘")
-    print()
-    print(f"  💡 建议添加终端别名: echo 'alias asi=\"astock-insight\"' >> ~/.zshrc")
+    print("    asi pick -w          关注推荐刷新")
     print()
 
 
@@ -269,11 +324,16 @@ def main():
             refresh_loop(cmd_hot, interval=5)
         else:
             cmd_hot()
-    elif cmd in ("lhb", "--lhb", "longhu"):
+    elif cmd in ("lhb", "--lhb", "longhu", "l"):
         if watch:
             refresh_loop(cmd_lhb, interval=10)
         else:
             cmd_lhb()
+    elif cmd in ("recommend", "pick", "p", "推荐"):
+        if watch:
+            refresh_loop(cmd_recommend, interval=10)
+        else:
+            cmd_recommend()
     elif cmd in ("quote", "q"):
         if len(args) < 2:
             print("用法: astock-insight quote <股票代码1>,<股票代码2>,...")
