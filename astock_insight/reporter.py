@@ -267,6 +267,21 @@ def render_recommendations(data: dict) -> str:
         reason = s.get("reason", "")
         lines.append(f"  {name} {pct_str}  {reason}")
 
+    # 个股推荐（成交额排行 + 理由）
+    stocks = data.get("stocks", [])
+    if stocks:
+        lines.append("")
+        lines.append(f"  {BOLD}📈 热门个股关注{RESET}")
+        lines.append(f"  {DIM}{'名称'.ljust(10)} {'代码'.ljust(8)} {'涨幅'.rjust(7)}  {'推荐理由'}{RESET}")
+        lines.append(f"  {DIM}{'─' * 50}{RESET}")
+        for s in stocks[:6]:
+            name = (s.get("name", "") or "")[:5].ljust(10)
+            code = (s.get("code", "") or "")[:8].ljust(8)
+            pct = s.get("change_pct", 0) or 0
+            pct_str = _color_pct(pct).rjust(10)
+            reason = s.get("reason", "")
+            lines.append(f"  {name} {code} {pct_str}  {reason}")
+
     # 龙虎榜推荐
     lhb = data.get("lhb", [])
     if lhb:
