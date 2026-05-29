@@ -221,14 +221,16 @@ def usage():
     print("    astock-insight hot             热门板块/热点")
     print("    astock-insight lhb             龙虎榜")
     print("    astock-insight quote <代码>     个股行情 (含K线走势图)")
+    print("    astock-insight quote <代码1,代码2> 多股对比")
     print("    astock-insight batch <代码们>   批量行情")
     print("    astock-insight status          市场状态")
     print("    astock-insight version         版本信息")
     print()
     print("  所有命令支持 --watch / -w 持续刷新:")
-    print("    astock-insight market --watch       大盘盯盘")
-    print("    astock-insight quote sh600519 -w    个股盯盘")
-    print("    astock-insight hot --watch          热门板块盯盘")
+    print("    astock-insight market --watch           大盘盯盘")
+    print("    astock-insight quote sh600519 -w        单股盯盘 (含K线)")
+    print("    astock-insight quote sh600519,sz300750 -w  多股盯盘")
+    print("    astock-insight hot --watch              热门板块盯盘")
     print()
 
 
@@ -275,25 +277,29 @@ def main():
             cmd_lhb()
     elif cmd in ("quote", "q"):
         if len(args) < 2:
-            print("用法: astock-insight quote <股票代码>")
+            print("用法: astock-insight quote <股票代码1>,<股票代码2>,...")
             return
-        code = args[1]
+        codes_str = args[1]
+        codes = [c.strip() for c in codes_str.split(",") if c.strip()]
         if watch:
-            # 盯盘模式：精简版 K 线 + 实时行情
-            def _render_quote():
+            def _render_multi_quote():
                 t = datetime.now().strftime("%H:%M:%S")
-                print(header_block("盯盘", f"{code}  |  {t}  |  状态: {get_market_status()}  |  Ctrl+C 退出"))
-                q = fetch_stock_quote(code)
-                print(render_stock_quote(q, detail=True))
-                if q:
+                codes_label = ",".join(codes)
+                print(header_block("多股盯盘", f"{codes_label}  |  {t}  |  状态: {get_market_status()}  |  Ctrl+C 退出"))
+                for code in codes:
+                    q = fetch_stock_quote(code)
+                    print(render_stock_quote(q, detail=True))
+                    if q:
+                        klines = fetch_kline(code, limit=30)
+                        if klines:
+                            print(render_kline_bars(klines))
                     print()
-                    klines = fetch_kline(code, limit=30)
-                    if klines:
-                        print(render_kline_bars(klines))
                 print(footer_line())
-            refresh_loop(_render_quote, interval=5)
+            refresh_loop(_render_multi_quote, interval=5)
+        elif len(codes) == 1:
+            cmd_quote(codes[0])
         else:
-            cmd_quote(code)
+            cmd_batch(codes_str)
     elif cmd in ("batch", "b"):
         if len(args) < 2:
             print("用法: astock-insight batch <代码1>,<代码2>,...")
