@@ -228,6 +228,47 @@ def render_report(report: dict) -> str:
     return "\n".join(parts)
 
 
+# ─── 推荐关注 ──────────────────────────────────────────────
+
+def render_recommendations(data: dict) -> str:
+    """渲染推荐关注报告"""
+    lines = []
+
+    # 大盘背景
+    ctx = data.get("market_context", "")
+    lines.append(f"  📊 {ctx}")
+    lines.append("")
+
+    # 板块推荐
+    lines.append(f"  {BOLD}🔥 热门板块关注{RESET}")
+    lines.append(f"  {DIM}{'板块'.ljust(12)} {'涨幅'.rjust(7)}  {'推荐理由'}{RESET}")
+    lines.append(f"  {DIM}{'─' * 45}{RESET}")
+    for s in data.get("sectors", []):
+        name = (s.get("name", "") or "")[:8].ljust(12)
+        pct = s.get("change_pct", 0) or 0
+        pct_str = _color_pct(pct).rjust(10)
+        reason = s.get("reason", "")
+        lines.append(f"  {name} {pct_str}  {reason}")
+
+    # 龙虎榜推荐
+    lhb = data.get("lhb", [])
+    if lhb:
+        lines.append("")
+        lines.append(f"  {BOLD}⭐ 龙虎榜关注{RESET}")
+        lines.append(f"  {DIM}{'名称'.ljust(16)} {'涨幅'.rjust(7)}  {'关注理由'}{RESET}")
+        lines.append(f"  {DIM}{'─' * 45}{RESET}")
+        for item in lhb:
+            name = (item.get("name", "") or "")[:8].ljust(16)
+            pct = item.get("change_pct", 0) or 0
+            pct_str = _color_pct(pct).rjust(10)
+            reason = item.get("reason", "")
+            lines.append(f"  {name} {pct_str}  {reason}")
+
+    lines.append("")
+    lines.append(f"  {DIM}💡 以上为市场数据客观呈现，不构成投资建议{RESET}")
+    return "\n".join(lines)
+
+
 # ─── Sparkline (迷你K线) ───────────────────────────────────
 
 SPARK_CHARS = "▁▂▃▄▅▆▇█"
