@@ -2,15 +2,16 @@
 astock-insight CLI 入口
 
 用法:
-  astock-insight all          # 全景报告
-  astock-insight market       # 大盘指数
-  astock-insight sectors      # 行业板块排行
-  astock-insight hot          # 热门板块/热点
-  astock-insight lhb          # 龙虎榜
-  astock-insight quote <code> # 个股行情 (如 sh600519)
-  astock-insight batch <codes> # 批量行情 (逗号分隔)
-  astock-insight status       # 市场状态
-  astock-insight version      # 版本信息
+  astock-insight all              # 全景报告
+  astock-insight market           # 大盘指数
+  astock-insight sectors          # 行业板块排行
+  astock-insight hot              # 热门板块/热点
+  astock-insight lhb              # 龙虎榜
+  astock-insight quote <code>     # 个股行情 (如 sh600519)
+  astock-insight watch <code>     # 盯盘模式 (持续刷新)
+  astock-insight batch <codes>    # 批量行情 (逗号分隔)
+  astock-insight status           # 市场状态
+  astock-insight version          # 版本信息
 """
 
 import sys
@@ -119,6 +120,51 @@ def cmd_quote(code: str):
     print_footer()
 
 
+def cmd_watch(code: str):
+    """盯盘模式 — 持续刷新个股行情"""
+    interval = 5  # 刷新间隔（秒）
+    print(f"\n  🔴 盯盘模式: {code}  |  每 {interval} 秒自动刷新  |  按 Ctrl+C 退出\n")
+
+    first = True
+    try:
+        while True:
+            if not first:
+                time.sleep(interval)
+                # 清除屏幕（ANSI 转义）
+                print("\033c", end="")
+                print(f"  🔴 盯盘模式: {code}  |  每 {interval} 秒自动刷新  |  按 Ctrl+C 退出\n")
+            first = False
+
+            q = fetch_stock_quote(code)
+            if not q:
+                print(f"  ❌ 查询失败: {code}")
+                continue
+
+            name = q.get("name", code)
+            price = q.get("price", 0)
+            pct = q.get("change_pct", 0)
+            chg = q.get("change", 0)
+            sign = "+" if pct > 0 else ""
+
+            ts = datetime.now().strftime("%H:%M:%S")
+            print(f"  [{ts}]  {name}  ({code})")
+            print(f"  {'─' * 40}")
+            print(f"  现价: {price:.2f}")
+            print(f"  涨幅: {sign}{pct:.2f}%   涨跌: {sign}{chg:.2f}")
+            print(f"  最高: {q.get('high', 0):.2f}   最低: {q.get('low', 0):.2f}")
+            print(f"  开盘: {q.get('open', 0):.2f}   昨收: {q.get('pre_close', 0):.2f}")
+            print(f"  成交量: {_fmt_vol(q.get('volume', 0))}  换手率: {q.get('turnover_rate', 'N/A')}%")
+
+    except KeyboardInterrupt:
+        print("\n\n  👋 盯盘结束")
+
+
+def _fmt_vol(v: float) -> str:
+    if v > 10000:
+        return f"{v / 10000:.2f}亿"
+    return f"{v:.0f}万"
+
+
 def cmd_batch(codes_str: str):
     """批量行情"""
     codes = [c.strip() for c in codes_str.split(",") if c.strip()]
@@ -158,6 +204,7 @@ def usage():
     print(f"    astock-insight hot             热门板块/热点")
     print(f"    astock-insight lhb             龙虎榜")
     print(f"    astock-insight quote <代码>     个股行情")
+    print(f"    astock-insight watch <代码>     盯盘模式 (每5秒刷新)")
     print(f"    astock-insight batch <代码们>   批量行情")
     print(f"    astock-insight status          市场状态")
     print(f"    astock-insight version        版本信息")
@@ -186,6 +233,11 @@ def main():
             print("用法: astock-insight quote <股票代码>")
             return
         cmd_quote(sys.argv[2])
+    elif cmd in ("watch", "w", "live"):
+        if len(sys.argv) < 3:
+            print("用法: astock-insight watch <股票代码>")
+            return
+        cmd_watch(sys.argv[2])
     elif cmd in ("batch", "b"):
         if len(sys.argv) < 3:
             print("用法: astock-insight batch <代码1>,<代码2>,...")
