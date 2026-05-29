@@ -34,6 +34,6 @@ astock-insight sectors
 
 ---
 
-**GitHub**: [github.com/astock-insight/astock-insight](https://github.com/astock-insight/astock-insight)
+**GitHub**: [github.com/dqwangyang/astock-insight](https://github.com/dqwangyang/astock-insight)
 
 觉得有用的话点个 Star ⭐ 就行，也欢迎扫码打赏 ☕
