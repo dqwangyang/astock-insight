@@ -27,14 +27,14 @@
 
 ```bash
 # 方式一：从源码安装（推荐）
-git clone https://github.com/astock-insight/astock-insight.git
+git clone https://github.com/dqwangyang/astock-insight.git
 cd astock-insight
 pip install -e .
 
 # 方式二：直接运行
-git clone https://github.com/astock-insight/astock-insight.git
+git clone https://github.com/dqwangyang/astock-insight.git
 cd astock-insight
-python -m astock_insight.cli all
+python3 -m astock_insight.cli all
 ```
 
 ### 使用
