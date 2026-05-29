@@ -56,12 +56,12 @@ $ astock-insight all
 
 - 纯 Python，零依赖，pip install 即用
 - 无需 API Key，无需注册，数据来自公开接口
-- 安装方法：`pip install astock-insight`（已发布 PyPI）
-- 或者 `git clone` 后 `pip install -e .`
+- 安装方法：`git clone` 后 `pip install -e .`
+- 或者直接 `python3 -m astock_insight.cli all`
 
 ---
 
-**项目地址**：[GitHub - astock-insight/astock-insight](https://github.com/astock-insight/astock-insight)
+**项目地址**：[GitHub - dqwangyang/astock-insight](https://github.com/dqwangyang/astock-insight)
 
 **如果对你有用，欢迎去 GitHub 点个 Star ⭐ 或扫码请我喝杯咖啡 ☕**
 
