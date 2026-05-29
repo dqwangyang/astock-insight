@@ -15,7 +15,7 @@ ssl_ctx.check_hostname = False
 ssl_ctx.verify_mode = ssl.CERT_NONE
 
 
-def _fetch(url: str, timeout: int = 10) -> str:
+def _fetch(url: str, timeout: int = 10, encoding: str | None = None) -> str:
     """通用HTTP GET请求"""
     req = urllib.request.Request(
         url,
@@ -29,8 +29,14 @@ def _fetch(url: str, timeout: int = 10) -> str:
         },
     )
     with urllib.request.urlopen(req, timeout=timeout, context=ssl_ctx) as resp:
-        data = resp.read().decode("utf-8", errors="replace")
-    return data
+        raw = resp.read()
+    if encoding:
+        return raw.decode(encoding, errors="replace")
+    # 尝试 UTF-8，如果失败则回退 GBK
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("gbk", errors="replace")
 
 
 def _extract_json(raw: str) -> str:
