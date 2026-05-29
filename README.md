@@ -33,6 +33,7 @@ pip install -e .
 ```bash
 asi                    # 查看帮助
 asi all                # 全景报告（大盘 + 板块 + 龙虎榜 + 热点）
+asi pick               # 今日关注（板块+个股推荐+理由）
 asi q sh600519         # 个股行情（含30日K线走势图）
 asi q sh600519,sz300750 -w    # 多股盯盘（每5秒自动刷新，无闪烁）
 asi market -w          # 大盘实时盯盘
@@ -50,6 +51,7 @@ asi b sh600519,sz300750       # 批量行情对比
 | `sectors` | `sec` / `s` | 28个申万一级行业板块排行 | `-w` |
 | `hot` | `h` | 热门概念板块 + 市场热点 | `-w` |
 | `lhb` | — | 龙虎榜（全部/机构/游资三榜） | `-w` |
+| `pick` | `p` / `推荐` | 今日关注（板块+个股推荐+理由） | `-w` |
 | `quote` | `q` | 个股行情（含PE/换手率/K线走势图） | `-w` |
 | `batch` | `b` | 批量个股行情对比 | `-w` |
 | `status` | — | 市场交易状态 | — |
@@ -57,6 +59,8 @@ asi b sh600519,sz300750       # 批量行情对比
 > 所有查询命令加 `-w` 进入持续刷新模式（无闪烁，光标覆盖刷新）
 
 ### 输出示例
+
+**个股行情 + K 线走势图：**
 
 ```
 $ asi q sh600519
@@ -73,6 +77,26 @@ $ asi q sh600519
 
   走势 (30日): █▇▅▅▅▅▆▇▅▅▅▅▄▄▄▄▃▃▃▃▂▂▂▂▁▁▁▂▁▂
   区间: 1467.50 → 1326.00  (-141.50, -9.64%)
+```
+
+**今日关注（推荐板块 + 推荐个股 + 理由）：**
+
+```
+$ asi pick
+
+  📊 大盘 上证指数 4068.57 (-0.73%)，上涨 1045 家 / 下跌 1322 家
+
+  🔥 热门板块关注
+  超市         +5.70%  资金集中涌入，短线热度高
+  旅游零售Ⅲ    +5.24%  资金集中涌入，短线热度高
+
+  📈 热门个股关注
+  亨通光电     +9.42%  成交额居前，资金博弈激烈
+  天孚通信     +1.71%  成交活跃，波动机会
+  中际旭创     -3.07%  放量下跌，观望为宜
+
+  ⭐ 龙虎榜关注
+  (机构上榜数据)
 ```
 
 > 涨绿色 / 跌红色，所有价格字段按方向着色。
@@ -121,7 +145,8 @@ Both `asi` and `astock-insight` commands are available after installation.
 
 ```bash
 asi                    # Show help
-asi all                # Full market report (indices + sectors + block trades + trends)
+asi all                # Full market report
+asi pick               # Daily picks (sectors + stocks + reasons)
 asi q sh600519         # Stock quote with 30-day K-line sparkline
 asi q sh600519,sz300750 -w    # Watch multiple stocks (auto-refresh every 5s, no flicker)
 asi market -w          # Real-time index monitoring
@@ -139,6 +164,7 @@ asi b sh600519,sz300750       # Batch stock comparison
 | `sectors` | `sec` / `s` | 28 SW-classified industry sectors | `-w` |
 | `hot` | `h` | Hot concept sectors | `-w` |
 | `lhb` | — | Block trades (all/institutional/retail) | `-w` |
+| `pick` | `p` | Daily picks (sectors + stocks + reasons) | `-w` |
 | `quote` | `q` | Stock quote (PE/turnover/K-line chart) | `-w` |
 | `batch` | `b` | Batch stock comparison | `-w` |
 | `status` | — | Market trading status | — |
