@@ -215,22 +215,21 @@ def cmd_version():
 def usage():
     print(f"\n  astock-insight v{__version__} — A股市场全景分析工具\n")
     print("  用法:")
-    print("    astock-insight all             全景报告")
-    print("    astock-insight market          大盘指数")
-    print("    astock-insight sectors         行业板块排行")
-    print("    astock-insight hot             热门板块/热点")
-    print("    astock-insight lhb             龙虎榜")
-    print("    astock-insight quote <代码>     个股行情 (含K线走势图)")
-    print("    astock-insight quote <代码1,代码2> 多股对比")
-    print("    astock-insight batch <代码们>   批量行情")
-    print("    astock-insight status          市场状态")
-    print("    astock-insight version         版本信息")
+    print("    asi all              全景报告")
+    print("    asi market           大盘指数")
+    print("    asi sectors          行业板块排行")
+    print("    asi hot              热门板块/热点")
+    print("    asi lhb              龙虎榜")
+    print("    asi q <代码>          个股行情 (含K线)")
+    print("    asi b <代码们>        批量行情")
     print()
-    print("  所有命令支持 --watch / -w 持续刷新:")
-    print("    astock-insight market --watch           大盘盯盘")
-    print("    astock-insight quote sh600519 -w        单股盯盘 (含K线)")
-    print("    astock-insight quote sh600519,sz300750 -w  多股盯盘")
-    print("    astock-insight hot --watch              热门板块盯盘")
+    print("  所有命令支持 -w 持续刷新:")
+    print("    asi market -w        大盘盯盘")
+    print("    asi q sh600519 -w    个股盯盘 (含K线)")
+    print("    asi q sh600519,sz300750 -w  多股盯盘")
+    print("    asi hot -w           板块盯盘")
+    print()
+    print(f"  💡 建议添加终端别名: echo 'alias asi=\"astock-insight\"' >> ~/.zshrc")
     print()
 
 
@@ -260,12 +259,12 @@ def main():
             refresh_loop(cmd_market, interval=5)
         else:
             cmd_market()
-    elif cmd in ("sectors", "--sectors"):
+    elif cmd in ("sectors", "sec", "s", "--sectors"):
         if watch:
             refresh_loop(cmd_sectors, interval=5)
         else:
             cmd_sectors()
-    elif cmd in ("hot", "--hot"):
+    elif cmd in ("hot", "h", "--hot"):
         if watch:
             refresh_loop(cmd_hot, interval=5)
         else:
